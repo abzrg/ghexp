@@ -1,0 +1,116 @@
+#!/bin/sh -e
+
+# Dependencies:
+#   $BROWSER,
+#   jq
+
+BASE_URL="https://github.com/search?q="
+
+type="code"
+language=""
+org=""
+path=""
+query=""
+repo=""
+user=""
+end_of_options=0
+
+usage() {
+    echo "Usage: `basename $0` [options] [query]"
+    echo "Options:"
+    echo "  -t, --type          Type of search (e.g., code, issues, commits, repositories)"
+    echo "  -l, --language      Programming language (e.g., Python, JavaScript)"
+    echo "  -o, --org           Organization"
+    echo "  -p, --path          Path to narrow down the search"
+    echo "  -r, --repo          Repository"
+    echo "  -u, --user          User"
+    echo "  -U, --user-profile  User profile"
+    echo "  -h, --help          Display this help message"
+    exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+    echo "Error: A query must be provided.\n"
+    usage
+fi
+
+while [ "$#" -gt 0 ]; do
+    if [ "$end_of_options" -eq 1 ]; then
+        query="$query $1"
+        shift
+        continue
+    fi
+
+    case "$1" in
+        --)
+            end_of_options=1
+            shift
+            ;;
+        -t|--type)
+            type="$2"
+            shift 2
+            ;;
+        -l|--language)
+            language="language:$2"
+            shift 2
+            ;;
+        -o|--org)
+            org="org:$2"
+            shift 2
+            ;;
+        -p|--path)
+            if [ -z $path ]; then
+                path="path:$2";
+            else
+                path="$path OR path:$2"
+            fi
+            shift 2
+            ;;
+        -r|--repo)
+            if [ -z $repo ]; then
+                repo="repo:$2";
+            else
+                repo="$repo OR repo:$2"
+            fi
+            shift 2
+            ;;
+        -u|--user)
+            user="user:$2"
+            shift 2
+            ;;
+        -U|--user-profile)
+            type="users"
+            user="user:$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            printf "Error: Invalid option: %s\n" "$1"
+            usage
+            ;;
+        *)
+            query="$query $1"
+            shift
+            ;;
+    esac
+done
+
+# Trim leading and trailing spaces from the query
+query=$(echo "$query" | sed 's/^ *//;s/ *$//')
+
+search_params="$query"
+[ -n "$language" ] && search_params="$search_params $language"
+[ -n "$org" ] && search_params="$search_params $org"
+[ -n "$path" ] && search_params="$search_params $path"
+[ -n "$repo" ] && search_params="$search_params $repo"
+[ -n "$user" ] && search_params="$search_params $user"
+
+# URL encode the search parameters
+encoded_query=$(printf "%s" "$search_params" | jq -sRr @uri)
+[ -n "$type" ] && encoded_query="$encoded_query&type=$type"
+
+full_url="${BASE_URL}${encoded_query}"
+
+open -a "$BROWSER" "$full_url"
